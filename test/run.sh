@@ -51,3 +51,5 @@ echo "=== auto step-away ==="
 node autostepaway.test.mjs | grep -E '^(PASS|FAIL)'
 echo "=== random start ==="
 node randomstart.test.mjs | grep -E '^(PASS|FAIL)'
+echo "=== port teardown ==="
+node ports.test.mjs | grep -E '^(PASS|FAIL)'
