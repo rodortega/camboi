@@ -2,6 +2,8 @@
 export const WIRE = '__camboi__';
 
 export const STORAGE_KEY_SETTINGS = 'settings';
+/** Survives page loads so consecutive takeovers never start identically. */
+export const STORAGE_KEY_LAST_START = 'lastStart';
 
 export const DB_NAME = 'camboi';
 export const DB_VERSION = 1;

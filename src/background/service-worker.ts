@@ -1,4 +1,5 @@
 import { base64ToBuffer, bufferToBase64 } from '../shared/base64';
+import { safeDisconnect, safePost } from '../shared/port';
 import { COMMANDS } from '../shared/constants';
 import { readSettings, writeSettings } from '../shared/settings';
 import type { ClipMeta, PipelineStatus } from '../shared/types';
@@ -66,9 +67,16 @@ async function cycleClip(): Promise<string | null> {
 // ---------------------------------------------------------------- messages
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  handleMessage(msg, sender).then(sendResponse, (err: unknown) => {
+  const respond = (value: unknown) => {
+    try {
+      sendResponse(value);
+    } catch {
+      // The sender navigated away before we finished; nothing to deliver to.
+    }
+  };
+  handleMessage(msg, sender).then(respond, (err: unknown) => {
     console.error('[camboi] message failed', msg?.type, err);
-    sendResponse({ error: String(err) });
+    respond({ error: String(err) });
   });
   return true; // async
 });
@@ -172,11 +180,8 @@ function receiveClip(port: chrome.runtime.Port): void {
     const id = newClipId();
     await putClip({ ...meta, id, frames, frameCount: frames.length });
     await writeSettings({ activeClipId: id });
-    try {
-      port.postMessage({ type: 'saved', id });
-    } catch {
-      // Sender navigated away mid-save; the clip is still stored.
-    }
+    // If the sender navigated away mid-save the clip is still stored.
+    safePost(port, { type: 'saved', id });
   });
 }
 
@@ -186,24 +191,26 @@ async function streamClip(port: chrome.runtime.Port, id: string): Promise<void> 
 
   const clip = await getClip(id);
   if (!clip) {
-    if (alive) port.postMessage({ type: 'missing' });
-    port.disconnect();
+    safePost(port, { type: 'missing' });
+    safeDisconnect(port);
     return;
   }
 
   const { frames, ...meta } = clip;
-  port.postMessage({ type: 'meta', meta });
+  if (!safePost(port, { type: 'meta', meta })) return;
 
   const step = framesPerChunk(frames.length);
   for (let i = 0; i < frames.length && alive; i += step) {
     const batch = frames.slice(i, i + step).map(bufferToBase64);
-    port.postMessage({ type: 'chunk', start: i, frames: batch });
+    // A failed post means the receiver is gone; stop rather than grind through
+    // the rest of what might be thousands of frames.
+    if (!safePost(port, { type: 'chunk', start: i, frames: batch })) return;
     // Yield so a long clip does not monopolise the worker.
     await new Promise((r) => setTimeout(r, 0));
   }
 
   if (alive) {
-    port.postMessage({ type: 'done' });
-    port.disconnect();
+    safePost(port, { type: 'done' });
+    safeDisconnect(port);
   }
 }

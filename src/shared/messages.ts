@@ -8,6 +8,8 @@ export type ToPage =
   | { type: 'command'; command: 'toggle-loop' | 'go-live' | 'step-away' | 'panic-freeze' }
   | { type: 'set-effect'; effect: EffectId }
   | { type: 'request-status' }
+  /** The last random start point, restored across page loads. */
+  | { type: 'restore-last-start'; index: number }
   /** durationMs 0 means record until an explicit stop-capture. */
   | { type: 'start-capture'; durationMs: number }
   | { type: 'stop-capture' };
@@ -17,6 +19,7 @@ export type ToExt =
   | { type: 'ready' }
   | { type: 'status'; status: PipelineStatus }
   | { type: 'need-clip'; clipId: string | null }
+  | { type: 'start-chosen'; index: number }
   | { type: 'toast'; text: string; tone?: 'info' | 'warn' }
   | { type: 'capture-progress'; frames: number; durationMs: number; bytes: number }
   | { type: 'capture-done'; frames: ArrayBuffer[]; width: number; height: number; fps: number }

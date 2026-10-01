@@ -1,6 +1,7 @@
 import { base64ToBuffer, bufferToBase64 } from '../shared/base64';
-import { WIRE } from '../shared/constants';
+import { STORAGE_KEY_LAST_START, WIRE } from '../shared/constants';
 import type { ToExt, ToPage } from '../shared/messages';
+import { safeDisconnect, safePost } from '../shared/port';
 import { onSettingsChanged } from '../shared/settings';
 import type { ClipMeta, EffectId, Settings } from '../shared/types';
 import { Overlay } from './overlay';
@@ -57,6 +58,10 @@ async function fromPage(msg: ToExt): Promise<void> {
       }
       return;
 
+    case 'start-chosen':
+      await chrome.storage.local.set({ [STORAGE_KEY_LAST_START]: msg.index });
+      return;
+
     case 'need-clip':
       if (msg.clipId) void streamClipToPage(msg.clipId);
       else toPage({ type: 'clip-cleared' });
@@ -99,6 +104,10 @@ chrome.runtime.onMessage.addListener((msg) => {
 async function loadSettings(): Promise<void> {
   settings = (await chrome.runtime.sendMessage({ type: 'get-settings' })) as Settings;
   applySettings(settings);
+
+  const stored = await chrome.storage.local.get(STORAGE_KEY_LAST_START);
+  const last = stored[STORAGE_KEY_LAST_START];
+  if (typeof last === 'number') toPage({ type: 'restore-last-start', index: last });
 }
 
 async function setSettings(patch: Partial<Settings>): Promise<void> {
@@ -131,10 +140,19 @@ function streamClipToPage(clipId: string): void {
   const token = ++clipLoadToken;
   const port = chrome.runtime.connect({ name: `clip:${clipId}` });
   let meta: ClipMeta | null = null;
+  let abandoned = false;
   const frames: ArrayBuffer[] = [];
 
   port.onMessage.addListener((msg) => {
-    if (token !== clipLoadToken) return port.disconnect();
+    // A newer load superseded this one. Drop it once; further queued messages
+    // must not disconnect an already-disconnected port.
+    if (token !== clipLoadToken) {
+      if (!abandoned) {
+        abandoned = true;
+        safeDisconnect(port);
+      }
+      return;
+    }
     if (msg.type === 'meta') {
       meta = msg.meta;
     } else if (msg.type === 'chunk') {
@@ -171,7 +189,7 @@ async function saveCapture(frames: ArrayBuffer[], width: number, height: number,
   try {
     const thumbnail = await makeThumbnail(frames[0]);
     const port = chrome.runtime.connect({ name: 'upload' });
-    port.postMessage({
+    safePost(port, {
       type: 'meta',
       meta: {
         name: `Clip ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
@@ -188,13 +206,17 @@ async function saveCapture(frames: ArrayBuffer[], width: number, height: number,
 
     const BATCH = 32;
     for (let i = 0; i < frames.length; i += BATCH) {
-      port.postMessage({ type: 'chunk', start: i, frames: frames.slice(i, i + BATCH).map(bufferToBase64) });
+      const batch = frames.slice(i, i + BATCH).map(bufferToBase64);
+      if (!safePost(port, { type: 'chunk', start: i, frames: batch })) {
+        overlay?.toast('Lost the connection while saving that clip', 'warn');
+        return;
+      }
     }
-    port.postMessage({ type: 'done' });
+    safePost(port, { type: 'done' });
 
     port.onMessage.addListener(async (msg) => {
       if (msg.type !== 'saved') return;
-      port.disconnect();
+      safeDisconnect(port);
       await refreshClips();
       overlay?.toast('Clip saved and selected');
     });

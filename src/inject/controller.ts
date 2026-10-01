@@ -54,12 +54,15 @@ class Controller implements PipelineHost {
     }
   }
 
-  private forEach(fn: (p: Pipeline) => void): void {
+  private prune(): void {
     for (const pipeline of [...this.pipelines]) {
-      if (!pipeline.status().attached) {
-        this.pipelines.delete(pipeline);
-        continue;
-      }
+      if (!pipeline.status().attached) this.pipelines.delete(pipeline);
+    }
+  }
+
+  private forEach(fn: (p: Pipeline) => void): void {
+    this.prune();
+    for (const pipeline of [...this.pipelines]) {
       try {
         fn(pipeline);
       } catch (err) {
@@ -71,6 +74,12 @@ class Controller implements PipelineHost {
   private get primary(): Pipeline | null {
     for (const pipeline of this.pipelines) if (pipeline.status().attached) return pipeline;
     return null;
+  }
+
+  private stopStatusTimer(): void {
+    if (!this.statusTimer) return;
+    clearInterval(this.statusTimer);
+    this.statusTimer = null;
   }
 
   // ---------------------------------------------------------- PipelineHost
@@ -99,6 +108,9 @@ class Controller implements PipelineHost {
       pick = pool[(pool.indexOf(pick) + 1) % pool.length];
     }
     this.lastStart = pick;
+    // Remember it outside the page, so a reload between takeovers does not
+    // reset the guard and hand back the same frame twice.
+    sendToExt({ type: 'start-chosen', index: pick });
     player.startAt(pick);
   }
 
@@ -207,6 +219,10 @@ class Controller implements PipelineHost {
         this.reportStatus();
         return;
 
+      case 'restore-last-start':
+        this.lastStart = msg.index;
+        return;
+
       case 'start-capture': {
         const pipeline = this.primary;
         if (!pipeline) return this.onCaptureFailed('No camera is active on this page');
@@ -257,6 +273,7 @@ class Controller implements PipelineHost {
   }
 
   private reportStatus(): void {
+    this.prune();
     const pipeline = this.primary;
     if (!pipeline) {
       sendToExt({
@@ -275,6 +292,11 @@ class Controller implements PipelineHost {
           clockAgeMs: 0,
         },
       });
+      // Report idle once, then go quiet. Otherwise every tab that ever opened a
+      // camera keeps waking the service worker for the rest of its life — and
+      // messaging a worker from a tab that is unloading is what produces
+      // "disconnected port" errors on the extensions page.
+      this.stopStatusTimer();
       return;
     }
     sendToExt({ type: 'status', status: { ...pipeline.status(), clipLoaded: !!this.clip } });
