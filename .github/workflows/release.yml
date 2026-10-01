@@ -1,0 +1,65 @@
+# Push a tag like v0.2.0 and this builds the extension and attaches it to a
+# GitHub release. The tag is the version: it is stamped into manifest.json.
+#
+# Always publishes camboi-<version>.zip (unzip, then Load unpacked).
+# Also publishes camboi-<version>.crx when the CRX_PRIVATE_KEY secret holds a
+# PEM key. Keep that key stable: it determines the extension ID, and a new ID
+# means a fresh install with none of the user's clips.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+
+      - name: Stamp version from tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          node -e '
+            const fs = require("fs");
+            for (const f of ["src/manifest.json", "package.json"]) {
+              const j = JSON.parse(fs.readFileSync(f, "utf8"));
+              j.version = process.env.VERSION;
+              fs.writeFileSync(f, JSON.stringify(j, null, 2) + "\n");
+            }'
+
+      - run: npm run build
+
+      - name: Package
+        env:
+          CRX_PRIVATE_KEY: ${{ secrets.CRX_PRIVATE_KEY }}
+        run: |
+          mkdir release
+          (cd dist && zip -qr "../release/camboi-$VERSION.zip" .)
+          if [ -n "$CRX_PRIVATE_KEY" ]; then
+            printf '%s\n' "$CRX_PRIVATE_KEY" > key.pem
+            npx --yes crx3@1 -p key.pem -o "release/camboi-$VERSION.crx" -- dist
+            rm key.pem
+          fi
+          ls -l release
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release/* \
+            --title "CamBoi $VERSION" \
+            --generate-notes \
+            --notes "Download \`camboi-$VERSION.zip\`, unzip it, then in Chrome open \`chrome://extensions\`, turn on **Developer mode**, click **Load unpacked** and select the unzipped folder."

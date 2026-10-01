@@ -10,15 +10,32 @@ It is a Chrome extension, not a system virtual camera: it works in **any call th
 runs in a Chrome tab** (Google Meet, Microsoft Teams web, the Zoom web client,
 Discord, Whereby, Jitsi…), and it cannot reach native desktop apps.
 
+If you like my work and it helps you sleep during work, you can
+[buy me a coffee](https://buymeacoffee.com/rodortega).
+
 ## Install
+
+1. Download the latest `camboi-<version>.zip` from
+   [Releases](https://github.com/rodortega/camboi/releases/latest) and unzip it
+   somewhere it can stay — Chrome loads it from that folder every time.
+2. In Chrome, open `chrome://extensions` and turn on **Developer mode**.
+3. Click **Load unpacked** and select the unzipped folder.
+
+To update, unzip the new release over the same folder and hit reload on the
+extension card. Keep the folder in the same place: Chrome ties your saved clips to it.
+
+Why not a `.crx`? Chrome on Windows and macOS disables any `.crx` that does not come
+from the Chrome Web Store, so a downloaded one will not stay enabled. Load unpacked is
+the route that works.
+
+Or build it yourself:
 
 ```bash
 npm install
 npm run build
 ```
 
-Then in Chrome: `chrome://extensions` → turn on **Developer mode** → **Load unpacked**
-→ select the `dist/` folder.
+and load the `dist/` folder the same way.
 
 The Studio tab opens on first install. Grant it camera permission, line yourself up,
 and record your first clip.
@@ -138,6 +155,11 @@ short-lived camera sessions each start at a different point and never leak a liv
 frame. It never touches your real Chrome profile. (Chrome removed
 `--load-extension` in M136, so it loads via `Extensions.loadUnpacked`, which needs
 `--enable-unsafe-extension-debugging`.)
+
+To release, push a version tag — `git tag v0.2.0 && git push origin v0.2.0`. The
+release workflow stamps that version into the manifest, builds, and attaches the zip
+to a GitHub release. If the `CRX_PRIVATE_KEY` repository secret holds a PEM key it
+attaches a signed `.crx` too; keep that key fixed, since it sets the extension ID.
 
 After a rebuild, hit reload on the extension card in `chrome://extensions`, then reload
 any open call tab — content scripts are injected at document start.
