@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CamBoi</title>
+<style>
+  :root { color-scheme: dark; --line: rgba(255,255,255,.12); --dim: #9a9aa6; --accent: #3f7dfb; }
+  * { box-sizing: border-box; }
+  body { width: 268px; margin: 0; padding: 14px; background: #14141a; color: #e9e9ee;
+    font: 13px/1.45 ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif; }
+  .head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #6b6b76; }
+  .dot.live { background: #39d98a; } .dot.loop { background: #ffb020; } .dot.frozen { background: #ff5d5d; }
+  .title { font-weight: 650; }
+  .sub { margin-left: auto; color: var(--dim); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+  button, select { font: inherit; color: inherit; width: 100%; padding: 8px 10px; cursor: pointer;
+    background: rgba(255,255,255,.07); border: 1px solid var(--line); border-radius: 9px; }
+  button:hover, select:hover { background: rgba(255,255,255,.13); }
+  button:disabled { opacity: .4; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); font-weight: 650; }
+  .row { display: flex; gap: 6px; margin-top: 6px; }
+  .row > * { flex: 1; }
+  label { display: block; margin: 12px 0 4px; font-size: 10.5px; letter-spacing: .6px;
+    text-transform: uppercase; color: var(--dim); font-weight: 600; }
+  .check { display: flex; align-items: center; gap: 8px; margin-top: 12px;
+    font-size: 12.5px; color: var(--dim); cursor: pointer; }
+  .check input { accent-color: var(--accent); }
+  .note { margin-top: 10px; font-size: 11.5px; color: var(--dim); }
+  .links { display: flex; gap: 10px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+  a { color: var(--accent); text-decoration: none; font-size: 12px; cursor: pointer; }
+  a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+  <div class="head">
+    <span class="dot" id="dot"></span>
+    <span class="title" id="state">Idle</span>
+    <span class="sub" id="res"></span>
+  </div>
+
+  <button class="primary" id="main" disabled>Step away</button>
+  <div class="row">
+    <button id="freeze" disabled>Freeze</button>
+    <button id="record" disabled>Record</button>
+  </div>
+
+  <label>Clip</label>
+  <select id="clips"></select>
+
+  <label>Effect</label>
+  <select id="effect">
+    <option value="none">None</option>
+    <option value="stutter">Stutter</option>
+    <option value="catchup">Catch-up lag</option>
+    <option value="lowbitrate">Low bitrate</option>
+  </select>
+
+  <label class="check"><input type="checkbox" id="siteEnabled"> Active on <span id="host">this site</span></label>
+  <label class="check"><input type="checkbox" id="overlayVisible"> Show in-page controls</label>
+
+  <div class="note" id="note"></div>
+
+  <div class="links">
+    <a id="studio">Studio</a>
+    <a id="options">Settings</a>
+    <a id="shortcuts">Shortcuts</a>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

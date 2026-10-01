@@ -1,0 +1,52 @@
+<!doctype html><html><head><meta charset="utf-8"><title>CamBoi test harness</title></head>
+<body style="background:#111;color:#eee;font-family:system-ui">
+<h3>CamBoi test harness</h3>
+<video id="v" autoplay muted playsinline width="480"></video>
+<pre id="log"></pre>
+<script>
+window.__results = {};
+window.__start = async function(constraints) {
+  const s = await navigator.mediaDevices.getUserMedia(constraints || {video:true, audio:true});
+  window.__stream = s;
+  const v = document.getElementById('v');
+  v.srcObject = s;
+  // An unfocused window pauses autoplay; keep the sink running regardless.
+  await v.play().catch(()=>{});
+  setInterval(() => { if (v.paused) v.play().catch(()=>{}); }, 200);
+  for (let i = 0; i < 40 && v.currentTime === 0; i++) await new Promise(r => setTimeout(r, 100));
+  const t = s.getVideoTracks()[0];
+  return {
+    videoTracks: s.getVideoTracks().length,
+    audioTracks: s.getAudioTracks().length,
+    label: t.label,
+    settings: t.getSettings(),
+    readyState: t.readyState,
+  };
+};
+// Sample the received stream so we can tell live from looped content.
+window.__sample = function() {
+  const v = document.getElementById('v');
+  const c = document.createElement('canvas');
+  c.width = 32; c.height = 18;
+  const x = c.getContext('2d');
+  x.drawImage(v, 0, 0, 32, 18);
+  const d = x.getImageData(0,0,32,18).data;
+  let sum = 0, hash = 0;
+  for (let i=0;i<d.length;i+=4){ const l=(d[i]+d[i+1]+d[i+2])/3; sum+=l; hash=(hash*31+(l|0))>>>0; }
+  const t = (window.__stream && window.__stream.getVideoTracks()[0]) || null;
+  return { mean: +(sum/(d.length/4)).toFixed(2), hash, w: v.videoWidth, h: v.videoHeight,
+           ready: v.readyState, paused: v.paused, ct: +v.currentTime.toFixed(2),
+           vis: document.visibilityState,
+           track: t ? {state: t.readyState, muted: t.muted, enabled: t.enabled} : null };
+};
+// Observe the extension's own wire protocol so tests can assert real state.
+window.__status = null; window.__toasts = [];
+window.addEventListener('message', (e) => {
+  const d = e.data;
+  if (!d || d.__camboi__ !== true || d.dir !== 'to-ext') return;
+  if (d.msg.type === 'status') window.__status = d.msg.status;
+  if (d.msg.type === 'toast') window.__toasts.push(d.msg.text);
+});
+window.__cam = function(msg){ window.postMessage({__camboi__:true, dir:'to-page', msg}, '*'); };
+</script>
+</body></html>

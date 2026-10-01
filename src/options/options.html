@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CamBoi Settings</title>
+<style>
+  :root { color-scheme: dark; --line: rgba(255,255,255,.1); --dim: #9a9aa6; --accent: #3f7dfb; }
+  * { box-sizing: border-box; }
+  body { margin: 0 auto; padding: 32px 24px 64px; max-width: 720px; background: #0e0e12; color: #e9e9ee;
+    font: 14px/1.55 ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .lede { color: var(--dim); margin: 0 0 28px; }
+  section { background: #17171d; border: 1px solid var(--line); border-radius: 14px; padding: 18px; margin-bottom: 18px; }
+  section h2 { margin: 0 0 14px; font-size: 12px; text-transform: uppercase; letter-spacing: .7px; color: var(--dim); }
+  .field { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center;
+    padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .field:last-child { border-bottom: 0; }
+  .field .label { font-weight: 550; }
+  .field .desc { color: var(--dim); font-size: 12.5px; margin-top: 2px; }
+  input[type=text], select, textarea { font: inherit; color: inherit; background: rgba(255,255,255,.07);
+    border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; min-width: 190px; }
+  textarea { width: 100%; min-height: 84px; resize: vertical; font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; }
+  input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
+  input[type=range] { accent-color: var(--accent); width: 180px; }
+  button { font: inherit; color: inherit; background: rgba(255,255,255,.07); border: 1px solid var(--line);
+    border-radius: 9px; padding: 8px 12px; cursor: pointer; }
+  button:hover { background: rgba(255,255,255,.13); }
+  .val { color: var(--dim); font-variant-numeric: tabular-nums; min-width: 54px; display: inline-block; text-align: right; }
+  ul { color: var(--dim); font-size: 13px; padding-left: 18px; margin: 0; }
+  li { margin-bottom: 6px; }
+  .saved { color: #39d98a; font-size: 12.5px; opacity: 0; transition: opacity .2s; }
+  .saved.on { opacity: 1; }
+</style>
+</head>
+<body>
+  <h1>CamBoi</h1>
+  <p class="lede">Step away, stay on camera. <span class="saved" id="saved">Saved</span></p>
+
+  <section>
+    <h2>Looping</h2>
+    <div class="field">
+      <div><div class="label">Loop style</div><div class="desc">Ping-pong plays forward then backward, so there is never a visible seam.</div></div>
+      <select id="loopStyle">
+        <option value="pingpong">Ping-pong</option>
+        <option value="crossfade">Crossfade</option>
+        <option value="lag">Simulated lag</option>
+      </select>
+    </div>
+    <div class="field">
+      <div><div class="label">Transition length</div><div class="desc">Crossfade between live and loop in both directions.</div></div>
+      <div><input type="range" id="transitionMs" min="0" max="800" step="20"> <span class="val" id="transitionVal"></span></div>
+    </div>
+    <div class="field">
+      <div><div class="label">Wait for a clean frame</div><div class="desc">Never go live — or start recording — while the camera is dark or still adjusting.</div></div>
+      <input type="checkbox" id="cleanFrameGuard">
+    </div>
+    <div class="field">
+      <div><div class="label">Maximum clip length</div><div class="desc">Longer clips loop more naturally but take more storage.</div></div>
+      <div><input type="range" id="maxClipMs" min="4000" max="30000" step="1000"> <span class="val" id="maxClipVal"></span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Appearance</h2>
+    <div class="field">
+      <div><div class="label">In-page controls</div><div class="desc">The draggable panel on call pages.</div></div>
+      <input type="checkbox" id="overlayVisible">
+    </div>
+    <div class="field">
+      <div><div class="label">Toasts</div><div class="desc">Brief confirmations when the state changes.</div></div>
+      <input type="checkbox" id="showToasts">
+    </div>
+    <div class="field">
+      <div><div class="label">Camera name</div><div class="desc">What sites call your camera. Leave empty to keep the real name.</div></div>
+      <input type="text" id="customCameraLabel" placeholder="e.g. FaceTime HD Camera">
+    </div>
+  </section>
+
+  <section>
+    <h2>Where it runs</h2>
+    <div class="field">
+      <div><div class="label">Active on every site</div><div class="desc">Turn this off to use an explicit allowlist instead.</div></div>
+      <input type="checkbox" id="enableEverywhere">
+    </div>
+    <div class="field" style="grid-template-columns:1fr">
+      <div>
+        <div class="label" id="domainsLabel">Blocked sites</div>
+        <div class="desc" id="domainsDesc">One hostname per line.</div>
+        <textarea id="domains" spellcheck="false"></textarea>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Shortcuts</h2>
+    <div class="field">
+      <div><div class="label">Keyboard shortcuts</div><div class="desc">Step away, go live, panic-freeze and next clip. They fire whenever Chrome has focus.</div></div>
+      <button id="shortcuts">Edit in Chrome</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Worth knowing</h2>
+    <ul>
+      <li>This only affects calls running <strong>inside Chrome</strong>. The native Zoom, Teams and FaceTime apps cannot see it.</li>
+      <li>Your camera light stays on while looping — the real feed keeps running so going live is instant.</li>
+      <li>Nothing is uploaded. Clips live in this browser profile's local storage.</li>
+      <li>Audio is never touched, recorded or routed.</li>
+      <li>Changing where CamBoi runs takes effect the next time a page asks for the camera.</li>
+    </ul>
+  </section>
+
+  <script src="options.js"></script>
+</body>
+</html>

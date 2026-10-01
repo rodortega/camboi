@@ -1,0 +1,60 @@
+{
+  "manifest_version": 3,
+  "name": "CamBoi",
+  "version": "0.1.0",
+  "description": "Step away, stay on camera. Loop a short clip of yourself into any video call in Chrome.",
+  "minimum_chrome_version": "111",
+  "permissions": ["storage", "unlimitedStorage", "tabs"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "sw.js" },
+  "options_page": "options.html",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "CamBoi",
+    "default_icon": {
+      "16": "assets/icon16.png",
+      "32": "assets/icon32.png",
+      "48": "assets/icon48.png",
+      "128": "assets/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "assets/icon16.png",
+    "32": "assets/icon32.png",
+    "48": "assets/icon48.png",
+    "128": "assets/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["inject.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": true
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+  "commands": {
+    "toggle-loop": {
+      "suggested_key": { "default": "Alt+Shift+L" },
+      "description": "Step away / go live"
+    },
+    "go-live": {
+      "suggested_key": { "default": "Alt+Shift+K" },
+      "description": "Go live now"
+    },
+    "panic-freeze": {
+      "suggested_key": { "default": "Alt+Shift+P" },
+      "description": "Panic: freeze the picture"
+    },
+    "next-clip": {
+      "suggested_key": { "default": "Alt+Shift+N" },
+      "description": "Switch to the next clip"
+    }
+  }
+}
