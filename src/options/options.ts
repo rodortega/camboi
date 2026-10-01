@@ -39,8 +39,11 @@ function render(): void {
   $<HTMLInputElement>('transitionMs').value = String(settings.transitionMs);
   $('transitionVal').textContent = `${settings.transitionMs} ms`;
   $<HTMLInputElement>('cleanFrameGuard').checked = settings.cleanFrameGuard;
-  $<HTMLInputElement>('maxClipMs').value = String(settings.maxClipMs);
-  $('maxClipVal').textContent = `${(settings.maxClipMs / 1000).toFixed(0)} s`;
+  $<HTMLInputElement>('autoStepAway').checked = settings.autoStepAway;
+  $<HTMLInputElement>('autoStop').checked = settings.maxClipMs > 0;
+  const seconds = $<HTMLInputElement>('maxClipSec');
+  seconds.disabled = settings.maxClipMs === 0;
+  seconds.value = String(settings.maxClipMs > 0 ? Math.round(settings.maxClipMs / 1000) : 30);
   $<HTMLInputElement>('overlayVisible').checked = settings.overlayVisible;
   $<HTMLInputElement>('showToasts').checked = settings.showToasts;
   $<HTMLInputElement>('customCameraLabel').value = settings.customCameraLabel;
@@ -56,13 +59,21 @@ $('transitionMs').addEventListener('input', (e) => {
   $('transitionVal').textContent = `${ms} ms`;
   void patch({ transitionMs: ms });
 });
-$('maxClipMs').addEventListener('input', (e) => {
-  const ms = Number((e.target as HTMLInputElement).value);
-  $('maxClipVal').textContent = `${(ms / 1000).toFixed(0)} s`;
-  void patch({ maxClipMs: ms });
+$('autoStop').addEventListener('change', async (e) => {
+  const on = (e.target as HTMLInputElement).checked;
+  const seconds = $<HTMLInputElement>('maxClipSec');
+  seconds.disabled = !on;
+  await patch({ maxClipMs: on ? Math.max(1, Number(seconds.value)) * 1000 : 0 });
+});
+$('maxClipSec').addEventListener('change', (e) => {
+  if (!$<HTMLInputElement>('autoStop').checked) return;
+  void patch({ maxClipMs: Math.max(1, Number((e.target as HTMLInputElement).value)) * 1000 });
 });
 $('cleanFrameGuard').addEventListener('change', (e) =>
   void patch({ cleanFrameGuard: (e.target as HTMLInputElement).checked }),
+);
+$('autoStepAway').addEventListener('change', (e) =>
+  void patch({ autoStepAway: (e.target as HTMLInputElement).checked }),
 );
 $('overlayVisible').addEventListener('change', (e) =>
   void patch({ overlayVisible: (e.target as HTMLInputElement).checked }),

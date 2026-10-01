@@ -24,14 +24,37 @@ await sleep(1500);
 let s = await status();
 pass('pipeline reports attached and live', s?.attached === true && s.state === 'live', JSON.stringify(s));
 
-console.log('\n-- recording a clip from the page --');
-await cam({ type: 'start-capture', durationMs: 2500 });
-await sleep(7000);
+console.log('\n-- recording with no length limit --');
+let progress = null;
+await evaluate(b, sessionId, `window.__progress = null;
+  window.addEventListener('message', (e) => {
+    const d = e.data;
+    if (d && d.__camboi__ === true && d.dir === 'to-ext' && d.msg.type === 'capture-progress')
+      window.__progress = d.msg;
+  });`);
+await cam({ type: 'start-capture', durationMs: 0 });
+
+await sleep(3000);
+progress = await evaluate(b, sessionId, 'window.__progress');
+pass('still recording after 3s with no limit', progress && progress.durationMs > 2500,
+  `${progress?.frames} frames, ${progress?.durationMs?.toFixed(0)}ms`);
+
+await sleep(3000);
+const longer = await evaluate(b, sessionId, 'window.__progress');
+pass('recording keeps growing past any old 8s/15s cap', longer.frames > progress.frames + 50,
+  `${progress.frames} -> ${longer.frames} frames`);
+pass('progress reports a size', longer.bytes > 0, `${(longer.bytes / 1024 ** 2).toFixed(1)} MB`);
+
+await cam({ type: 'stop-capture' });
+await sleep(4000);
 const toasts = await evaluate(b, sessionId, 'window.__toasts');
 console.log('   toasts:', JSON.stringify(toasts));
 s = await status();
 pass('a clip was saved and loaded', s?.clipLoaded === true || toasts.some((t) => /saved/i.test(t)),
   `clipLoaded=${s?.clipLoaded}`);
+pass('the recording was never truncated by a cap',
+  longer.durationMs > 5500 && longer.frames >= progress.frames * 1.8,
+  `${(longer.durationMs / 1000).toFixed(1)}s, ${longer.frames} frames`);
 
 console.log('\n-- stepping away --');
 const live = await sample();

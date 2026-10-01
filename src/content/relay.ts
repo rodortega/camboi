@@ -12,7 +12,6 @@ import { Overlay } from './overlay';
  */
 
 const isTopFrame = window === window.top;
-const IN_PAGE_RECORD_MS = 8000;
 
 let settings: Settings | null = null;
 let clips: ClipMeta[] = [];
@@ -23,7 +22,7 @@ const overlay = isTopFrame
   ? new Overlay({
       onCommand: (command) => toPage({ type: 'command', command }),
       onEffect: (effect) => void setSettings({ effect: effect as EffectId }),
-      onRecord: () => startRecording(),
+      onRecord: () => toggleRecording(),
       onSelectClip: (id) => void setSettings({ activeClipId: id }),
       onOpenStudio: () => void chrome.runtime.sendMessage({ type: 'open-studio' }),
       onHide: () => void setSettings({ overlayVisible: false }),
@@ -68,7 +67,7 @@ async function fromPage(msg: ToExt): Promise<void> {
       return;
 
     case 'capture-progress':
-      overlay?.setRecording(true, `Recording ${(msg.durationMs / 1000).toFixed(1)}s`);
+      overlay?.setRecording(true, `Stop · ${(msg.durationMs / 1000).toFixed(1)}s · ${formatSize(msg.bytes)}`);
       return;
 
     case 'capture-done':
@@ -92,7 +91,7 @@ chrome.runtime.onMessage.addListener((msg) => {
   else if (msg?.type === 'toast') overlay?.toast(msg.text, msg.tone);
   else if (msg?.type === 'foreign-status') overlay?.setStatus(msg.status);
   else if (msg?.type === 'request-status') toPage({ type: 'request-status' });
-  else if (msg?.type === 'start-recording') startRecording();
+  else if (msg?.type === 'start-recording') toggleRecording();
 });
 
 // ------------------------------------------------------------------ settings
@@ -150,11 +149,22 @@ function streamClipToPage(clipId: string): void {
 
 // ---------------------------------------------------------------- recording
 
-function startRecording(): void {
-  if (recording) return;
+/** Click to start, click again to stop. Auto-stops only if a limit is set. */
+function toggleRecording(): void {
+  if (recording) {
+    overlay?.setRecording(true, 'Saving…');
+    toPage({ type: 'stop-capture' });
+    return;
+  }
   recording = true;
-  overlay?.setRecording(true, 'Recording…');
-  toPage({ type: 'start-capture', durationMs: IN_PAGE_RECORD_MS });
+  overlay?.setRecording(true, 'Stop');
+  toPage({ type: 'start-capture', durationMs: settings?.maxClipMs ?? 0 });
+}
+
+function formatSize(bytes: number): string {
+  return bytes > 1024 * 1024 * 1024
+    ? `${(bytes / 1024 ** 3).toFixed(1)} GB`
+    : `${Math.round(bytes / 1024 ** 2)} MB`;
 }
 
 async function saveCapture(frames: ArrayBuffer[], width: number, height: number, fps: number): Promise<void> {
@@ -176,7 +186,7 @@ async function saveCapture(frames: ArrayBuffer[], width: number, height: number,
       },
     });
 
-    const BATCH = 8;
+    const BATCH = 32;
     for (let i = 0; i < frames.length; i += BATCH) {
       port.postMessage({ type: 'chunk', start: i, frames: frames.slice(i, i + BATCH).map(bufferToBase64) });
     }

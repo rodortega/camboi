@@ -37,6 +37,8 @@ export interface Settings {
   transitionMs: number;
   /** Refuse to go live until the camera has settled on a presentable frame. */
   cleanFrameGuard: boolean;
+  /** Start on the loop the moment a site opens the camera, rather than live. */
+  autoStepAway: boolean;
   /** Overrides the camera label reported to the page. Empty = passthrough. */
   customCameraLabel: string;
   effect: EffectId;
@@ -53,11 +55,12 @@ export const DEFAULT_SETTINGS: Settings = {
   loopStyle: 'pingpong',
   transitionMs: 260,
   cleanFrameGuard: true,
+  autoStepAway: false,
   customCameraLabel: '',
   effect: 'none',
   overlayVisible: true,
   showToasts: true,
-  maxClipMs: 15_000,
+  maxClipMs: 0,
 };
 
 /** Live status the page pushes up to the overlay/popup. */
@@ -71,6 +74,7 @@ export interface PipelineStatus {
   clipId: string | null;
   clipLoaded: boolean;
   cleanFrame: boolean;
+  recording: boolean;
   /** Milliseconds since the frame clock last ticked. */
   clockAgeMs: number;
 }

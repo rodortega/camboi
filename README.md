@@ -25,11 +25,13 @@ and record your first clip.
 
 ## Using it
 
-- **Studio** — record, trim, rename, pin, import and export clips. The ghost overlay
+- **Studio** — record, trim, rename, pin, import and export clips. Recordings have no
+  length limit; set an auto-stop if you want one. The ghost overlay
   shows the first frame of your selected clip at adjustable opacity, so you can match
   your pose before recording. That alignment is what makes the switch invisible.
 - **In-page controls** — a draggable panel on call pages: step away, go live, panic
-  freeze, record 8 seconds, pick a clip, pick an effect.
+  freeze, record, pick a clip, pick an effect. Record is a toggle — it runs until you
+  press Stop, showing elapsed time and size as it goes.
 - **Toolbar popup** — the same controls, plus a per-site on/off switch.
 - **Keyboard shortcuts** — editable at `chrome://extensions/shortcuts`:
 
@@ -51,6 +53,14 @@ on screen. Their real job is to mask the moment you switch, by making it look li
 ordinary network hiccup rather than a cut.
 
 **Panic freeze** — holds the current picture instantly, live or looped.
+
+**Start calls on the loop** — optional. With it on, the moment a site opens your camera
+you are already on the loop, cutting straight in with no crossfade. You press Go live
+when you actually want to be seen, rather than the other way round.
+
+**No length limit** — record for as long as you like. Clip frames are held in memory
+until you press Stop, so the Studio shows the running size and says something once a
+recording passes 750 MB. A minute of 720p is roughly 100 MB.
 
 **Clean-frame guard** — CamBoi refuses to go live, or to start recording, while the
 camera is dark or still adjusting its exposure. No more cutting back to a black frame.
@@ -111,8 +121,9 @@ npm run typecheck
 
 `test/run.sh` builds, launches a throwaway Chrome with a synthetic camera, loads the
 extension over the DevTools protocol, and asserts the real behaviour end to end —
-interception and passthrough, then recording a clip, looping it, panic-freezing and
-going live again. It never touches your real Chrome profile. (Chrome removed
+interception and passthrough; recording a clip, looping it, panic-freezing and going
+live again; that an uncapped recording is never truncated; and that auto step-away puts
+a fresh call on the loop without ever showing the live camera. It never touches your real Chrome profile. (Chrome removed
 `--load-extension` in M136, so it loads via `Extensions.loadUnpacked`, which needs
 `--enable-unsafe-extension-debugging`.)
 

@@ -10,7 +10,7 @@ export interface PipelineHost {
   toast(text: string, tone?: 'info' | 'warn'): void;
   onCaptureDone(frames: ArrayBuffer[], width: number, height: number, fps: number): void;
   onCaptureFailed(reason: string): void;
-  onCaptureProgress(frames: number, durationMs: number): void;
+  onCaptureProgress(frames: number, durationMs: number, bytes: number): void;
 }
 
 /** Give up waiting for a clean frame after this long and go live anyway. */
@@ -22,7 +22,9 @@ interface CaptureJob {
   frames: (ArrayBuffer | null)[];
   inFlight: number;
   startedAt: number;
+  /** Infinity when recording until an explicit stop. */
   endsAt: number;
+  bytes: number;
   width: number;
   height: number;
   canvas: OffscreenCanvas;
@@ -297,12 +299,16 @@ export class Pipeline {
 
   // ------------------------------------------------------------ transitions
 
-  async stepAway(): Promise<void> {
+  /**
+   * `immediate` cuts straight to the loop with no crossfade — used when a call
+   * starts on the loop, where there is no live picture to fade away from.
+   */
+  async stepAway(immediate = false): Promise<void> {
     if (this.state === 'loop' || this.state === 'transition-to-loop') return;
 
     const player = this.host.buildLoopPlayer();
     if (!player) {
-      this.host.toast('No clip selected — record one in the Studio', 'warn');
+      if (!immediate) this.host.toast('No clip selected — record one in the Studio', 'warn');
       return;
     }
     this.loop?.dispose();
@@ -310,8 +316,13 @@ export class Pipeline {
     await player.prime();
 
     this.pendingLiveSince = 0;
-    this.state = 'transition-to-loop';
+    this.state = immediate ? 'loop' : 'transition-to-loop';
     this.transitionStart = performance.now();
+  }
+
+  /** True while nothing has pulled this pipeline off the live camera yet. */
+  get isLive(): boolean {
+    return this.state === 'live';
   }
 
   goLive(): void {
@@ -384,7 +395,8 @@ export class Pipeline {
       frames: [],
       inFlight: 0,
       startedAt: now,
-      endsAt: now + durationMs,
+      endsAt: durationMs > 0 ? now + durationMs : Infinity,
+      bytes: 0,
       width,
       height,
       canvas: new OffscreenCanvas(width, height),
@@ -413,14 +425,14 @@ export class Pipeline {
         job.canvas
           .convertToBlob({ type: 'image/webp', quality: FRAME_QUALITY })
           .then((blob) => blob.arrayBuffer())
-          .then((buf) => { job.frames[index] = buf; })
+          .then((buf) => { job.frames[index] = buf; job.bytes += buf.byteLength; })
           .catch((err) => console.warn('[camboi] frame encode failed', err))
           .finally(() => {
             job.inFlight--;
             if (job.stopping || performance.now() >= job.endsAt) this.finishCapture();
           });
       }
-      this.host.onCaptureProgress(job.frames.length, now - job.startedAt);
+      this.host.onCaptureProgress(job.frames.length, now - job.startedAt, job.bytes);
       return;
     }
 
@@ -455,12 +467,9 @@ export class Pipeline {
       clipId: this.loop?.meta.id ?? null,
       clipLoaded: !!this.loop,
       cleanFrame: this.detector.isClean,
+      recording: this.capture !== null,
       clockAgeMs: this.lastTick ? Math.round(performance.now() - this.lastTick) : 0,
     };
-  }
-
-  get isCapturing(): boolean {
-    return this.capture !== null;
   }
 
   dispose(): void {

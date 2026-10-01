@@ -85,6 +85,7 @@ export class Overlay {
   private warnBox!: HTMLDivElement;
 
   private status: PipelineStatus | null = null;
+  private recording = false;
   private offset = { x: 0, y: 0 };
 
   constructor(handlers: OverlayHandlers) {
@@ -109,7 +110,7 @@ export class Overlay {
         <button class="primary main">Step away</button>
         <div class="row">
           <button class="freeze">Freeze</button>
-          <button class="record">Record 8s</button>
+          <button class="record">Record</button>
         </div>
         <label>Clip</label>
         <select class="clips"></select>
@@ -176,6 +177,18 @@ export class Overlay {
     this.freezeBtn.textContent = status.state === 'frozen' ? 'Unfreeze' : 'Freeze';
     this.freezeBtn.className = status.state === 'frozen' ? 'freeze danger' : 'freeze';
     this.freezeBtn.disabled = !status.attached;
+    // The pipeline is the authority on whether a recording is running — it may
+    // have been started from the popup, or auto-stopped by a length limit.
+    if (!this.recording && status.recording) this.recording = true;
+    if (this.recording && !status.recording && status.attached) this.recording = false;
+
+    if (this.recording) {
+      this.mainBtn.disabled = true;
+      this.freezeBtn.disabled = true;
+    } else {
+      this.recordBtn.textContent = 'Record';
+      this.recordBtn.className = 'record';
+    }
     this.recordBtn.disabled = !status.attached;
 
     const problems: string[] = [];
@@ -204,11 +217,15 @@ export class Overlay {
     this.setVisible(settings.overlayVisible);
   }
 
+  /** While recording, the button becomes Stop — it has to stay clickable. */
   setRecording(active: boolean, label?: string): void {
     if (!this.root) return;
-    this.recordBtn.textContent = active ? (label ?? 'Recording…') : 'Record 8s';
-    this.recordBtn.disabled = active || !this.status?.attached;
+    this.recording = active;
+    this.recordBtn.textContent = active ? (label ?? 'Stop') : 'Record';
+    this.recordBtn.className = active ? 'record danger' : 'record';
+    this.recordBtn.disabled = !this.status?.attached;
     this.mainBtn.disabled = active || !this.status?.attached;
+    this.freezeBtn.disabled = active || !this.status?.attached;
   }
 
   toast(text: string, tone: 'info' | 'warn' = 'info'): void {

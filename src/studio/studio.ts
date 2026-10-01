@@ -15,6 +15,7 @@ const clipsBox = $<HTMLDivElement>('clips');
 const recordBtn = $<HTMLButtonElement>('record');
 const stopBtn = $<HTMLButtonElement>('stop');
 const durationInput = $<HTMLInputElement>('duration');
+const autoStopBox = $<HTMLInputElement>('autoStop');
 const ghostAlpha = $<HTMLInputElement>('ghostAlpha');
 const mirrorBox = $<HTMLInputElement>('mirror');
 const cameraSel = $<HTMLSelectElement>('camera');
@@ -33,7 +34,9 @@ type Recorder = {
   frames: (ArrayBuffer | null)[];
   pending: number;
   startedAt: number;
+  /** Infinity when recording until Stop. */
   endsAt: number;
+  bytes: number;
   width: number;
   height: number;
   stopped: boolean;
@@ -55,7 +58,13 @@ function applyMirror(): void {
   ghost.style.transform = t;
 }
 
-durationInput.addEventListener('input', () => { $('durationLabel').textContent = `${durationInput.value}s`; });
+autoStopBox.addEventListener('change', async () => {
+  durationInput.disabled = !autoStopBox.checked;
+  await writeSettings({ maxClipMs: autoStopBox.checked ? Number(durationInput.value) * 1000 : 0 });
+});
+durationInput.addEventListener('change', async () => {
+  if (autoStopBox.checked) await writeSettings({ maxClipMs: Number(durationInput.value) * 1000 });
+});
 ghostAlpha.addEventListener('input', () => { $('ghostLabel').textContent = `${ghostAlpha.value}%`; drawGhost(); });
 mirrorBox.addEventListener('change', applyMirror);
 $('shortcuts').addEventListener('click', () => chrome.tabs.create({ url: 'chrome://extensions/shortcuts' }));
@@ -122,7 +131,8 @@ function onFrame(): void {
     const now = performance.now();
     if (now >= recorder.endsAt) stopRecording();
     else captureFrame(recorder);
-    badge.textContent = `REC ${((now - recorder.startedAt) / 1000).toFixed(1)}s · ${recorder.frames.length}f`;
+    badge.textContent =
+      `REC ${((now - recorder.startedAt) / 1000).toFixed(1)}s · ${recorder.frames.length}f · ${formatSize(recorder.bytes)}`;
   } else if (!recorder) {
     badge.textContent = detector.isClean ? 'Ready' : 'Settling…';
     badge.className = 'badge';
@@ -132,6 +142,13 @@ function onFrame(): void {
 // ---------------------------------------------------------------- recording
 
 const MAX_PENDING = 6;
+/** Past this, say something — the frames are in memory until recording stops. */
+const SIZE_WARN_BYTES = 750 * 1024 * 1024;
+let warnedAboutSize = false;
+
+function formatSize(bytes: number): string {
+  return bytes > 1024 ** 3 ? `${(bytes / 1024 ** 3).toFixed(1)} GB` : `${Math.round(bytes / 1024 ** 2)} MB`;
+}
 
 function captureFrame(job: Recorder): void {
   if (job.pending >= MAX_PENDING) return; // backpressure: skip rather than queue
@@ -149,7 +166,15 @@ worker.onmessage = (event: MessageEvent<{ index: number; buffer?: ArrayBuffer; e
   const job = recorder;
   if (!job) return;
   job.pending--;
-  if (event.data.buffer) job.frames[event.data.index] = event.data.buffer;
+  if (event.data.buffer) {
+    job.frames[event.data.index] = event.data.buffer;
+    job.bytes += event.data.buffer.byteLength;
+    // Long recordings are allowed, but the frames live in memory until you stop.
+    if (job.bytes > SIZE_WARN_BYTES && !warnedAboutSize) {
+      warnedAboutSize = true;
+      setStatus(`This clip is past ${formatSize(SIZE_WARN_BYTES)} and is held in memory until you stop.`, 'warn');
+    }
+  }
   if (job.stopped && job.pending === 0) void finishRecording();
 };
 
@@ -162,11 +187,13 @@ recordBtn.addEventListener('click', () => {
 
   const scale = Math.min(1, MAX_CLIP_EDGE / Math.max(video.videoWidth, video.videoHeight));
   const now = performance.now();
+  warnedAboutSize = false;
   recorder = {
     frames: [],
     pending: 0,
     startedAt: now,
-    endsAt: now + Number(durationInput.value) * 1000,
+    endsAt: autoStopBox.checked ? now + Number(durationInput.value) * 1000 : Infinity,
+    bytes: 0,
     width: Math.round(video.videoWidth * scale),
     height: Math.round(video.videoHeight * scale),
     stopped: false,
@@ -215,7 +242,9 @@ async function finishRecording(): Promise<void> {
   await putClip(clip);
   settings = await writeSettings({ activeClipId: id });
   await refreshClips();
-  setStatus(`Saved “${clip.name}” — ${frames.length} frames at ${fps} fps.`);
+  setStatus(
+    `Saved “${clip.name}” — ${frames.length} frames, ${(frames.length / fps).toFixed(1)}s at ${fps} fps, ${formatSize(job.bytes)}.`,
+  );
 }
 
 async function makeThumbnail(buf: ArrayBuffer): Promise<string> {
@@ -411,6 +440,9 @@ $('trimApply').addEventListener('click', async () => {
 async function init(): Promise<void> {
   settings = await readSettings();
   loopStyleSel.value = settings.loopStyle;
+  autoStopBox.checked = settings.maxClipMs > 0;
+  durationInput.disabled = !autoStopBox.checked;
+  if (settings.maxClipMs > 0) durationInput.value = String(Math.round(settings.maxClipMs / 1000));
   applyMirror();
   await refreshClips();
   await startCamera();

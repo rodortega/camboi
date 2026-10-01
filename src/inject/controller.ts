@@ -16,6 +16,7 @@ class Controller implements PipelineHost {
   private clip: { meta: ClipMeta; frames: ArrayBuffer[] } | null = null;
   private readonly pipelines = new Set<Pipeline>();
   private statusTimer: ReturnType<typeof setInterval> | null = null;
+  private autoStepAwayPending = false;
 
   constructor() {
     onFromExt((msg) => this.handle(msg));
@@ -28,6 +29,15 @@ class Controller implements PipelineHost {
     this.pipelines.add(pipeline);
     pipeline.setEffect(this.settings.effect);
     this.ensureStatusTimer();
+
+    if (!this.settings.autoStepAway) return;
+    if (this.clip) {
+      void pipeline.stepAway(true);
+      this.toast('Started on your loop — press Go live when you are ready');
+    } else {
+      // The clip is still being streamed in; take over the moment it lands.
+      this.autoStepAwayPending = true;
+    }
   }
 
   private forEach(fn: (p: Pipeline) => void): void {
@@ -69,8 +79,8 @@ class Controller implements PipelineHost {
     sendToExt({ type: 'capture-failed', reason });
   }
 
-  onCaptureProgress(frames: number, durationMs: number): void {
-    sendToExt({ type: 'capture-progress', frames, durationMs });
+  onCaptureProgress(frames: number, durationMs: number, bytes: number): void {
+    sendToExt({ type: 'capture-progress', frames, durationMs, bytes });
   }
 
   // ---------------------------------------------------------------- inbound
@@ -81,6 +91,7 @@ class Controller implements PipelineHost {
         const previous = this.settings;
         this.settings = msg.settings;
         this.forEach((p) => p.setEffect(msg.settings.effect));
+        if (!msg.settings.autoStepAway) this.autoStepAwayPending = false;
         if (previous.activeClipId !== msg.settings.activeClipId) {
           this.clip = null;
           sendToExt({ type: 'need-clip', clipId: msg.settings.activeClipId });
@@ -93,6 +104,12 @@ class Controller implements PipelineHost {
       case 'clip-data':
         this.clip = { meta: msg.meta, frames: msg.frames };
         this.forEach((p) => p.refreshClip());
+        if (this.autoStepAwayPending) {
+          this.autoStepAwayPending = false;
+          let took = false;
+          this.forEach((p) => { if (p.isLive) { void p.stepAway(true); took = true; } });
+          if (took) this.toast('Started on your loop — press Go live when you are ready');
+        }
         return;
 
       case 'clip-cleared':
@@ -175,6 +192,7 @@ class Controller implements PipelineHost {
           clipId: this.settings.activeClipId,
           clipLoaded: !!this.clip,
           cleanFrame: false,
+          recording: false,
           clockAgeMs: 0,
         },
       });

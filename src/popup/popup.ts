@@ -39,7 +39,9 @@ function renderStatus(status: PipelineStatus | null): void {
   const freeze = $<HTMLButtonElement>('freeze');
   freeze.textContent = state === 'frozen' ? 'Unfreeze' : 'Freeze';
   freeze.disabled = !attached;
-  $<HTMLButtonElement>('record').disabled = !attached;
+  const record = $<HTMLButtonElement>('record');
+  record.textContent = status?.recording ? 'Stop' : 'Record';
+  record.disabled = !attached;
 
   if (attached && status && !status.clipLoaded) {
     $('note').textContent = 'No clip selected — record one in the Studio.';
@@ -83,6 +85,7 @@ async function init(): Promise<void> {
   renderClips(clips);
   $<HTMLSelectElement>('effect').value = settings.effect;
   $<HTMLInputElement>('overlayVisible').checked = settings.overlayVisible;
+  $<HTMLInputElement>('autoStepAway').checked = settings.autoStepAway;
   $<HTMLInputElement>('siteEnabled').checked = hostname ? isEnabledFor(settings, hostname) : false;
 
   renderStatus((await chrome.runtime.sendMessage({ type: 'get-tab-status', tabId })) as PipelineStatus | null);
@@ -94,13 +97,23 @@ async function init(): Promise<void> {
 
 $('main').addEventListener('click', () => void send({ type: 'command', command: 'toggle-loop' }));
 $('freeze').addEventListener('click', () => void send({ type: 'command', command: 'panic-freeze' }));
-$('record').addEventListener('click', () => void send({ type: 'start-recording' }).then(() => window.close()));
+$('record').addEventListener('click', async () => {
+  const wasRecording = $('record').textContent === 'Stop';
+  await send({ type: 'start-recording' }); // the content script toggles
+  if (wasRecording) return; // stay open to show it finishing
+  $('record').textContent = 'Stop';
+  $('note').textContent = 'Recording — press Stop when you are done.';
+});
 
 $('clips').addEventListener('change', (e) => void patch({ activeClipId: (e.target as HTMLSelectElement).value || null }));
 $('effect').addEventListener('change', (e) => void patch({ effect: (e.target as HTMLSelectElement).value as EffectId }));
 $('overlayVisible').addEventListener('change', (e) =>
   void patch({ overlayVisible: (e.target as HTMLInputElement).checked }),
 );
+$('autoStepAway').addEventListener('change', async (e) => {
+  await patch({ autoStepAway: (e.target as HTMLInputElement).checked });
+  $('note').textContent = 'Applies to the next call that opens your camera.';
+});
 
 $('siteEnabled').addEventListener('change', async (e) => {
   if (!hostname) return;

@@ -51,12 +51,16 @@
       <div><input type="range" id="transitionMs" min="0" max="800" step="20"> <span class="val" id="transitionVal"></span></div>
     </div>
     <div class="field">
+      <div><div class="label">Start calls on the loop</div><div class="desc">When a site opens your camera, go straight to the loop instead of live. You decide when to be seen.</div></div>
+      <input type="checkbox" id="autoStepAway">
+    </div>
+    <div class="field">
       <div><div class="label">Wait for a clean frame</div><div class="desc">Never go live — or start recording — while the camera is dark or still adjusting.</div></div>
       <input type="checkbox" id="cleanFrameGuard">
     </div>
     <div class="field">
-      <div><div class="label">Maximum clip length</div><div class="desc">Longer clips loop more naturally but take more storage.</div></div>
-      <div><input type="range" id="maxClipMs" min="4000" max="30000" step="1000"> <span class="val" id="maxClipVal"></span></div>
+      <div><div class="label">Auto-stop recordings</div><div class="desc">Off means a recording runs until you press Stop. Longer clips loop more naturally but are held in memory until you stop them.</div></div>
+      <div><input type="checkbox" id="autoStop"> <input type="number" id="maxClipSec" min="1" step="1" style="min-width:84px"> s</div>
     </div>
   </section>
 

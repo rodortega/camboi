@@ -137,7 +137,13 @@ async function handleMessage(msg: any, sender: chrome.runtime.MessageSender): Pr
  * Content scripts cannot read the extension's IndexedDB, and runtime messaging
  * is JSON-only, so frames are base64-chunked over a long-lived port.
  */
-const FRAMES_PER_CHUNK = 8;
+/**
+ * Clips have no length limit, so a long one can be thousands of frames. Batch
+ * harder as they grow, or the per-message overhead dominates the transfer.
+ */
+function framesPerChunk(total: number): number {
+  return total > 2000 ? 64 : total > 600 ? 32 : 8;
+}
 
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name.startsWith('clip:')) {
@@ -188,8 +194,9 @@ async function streamClip(port: chrome.runtime.Port, id: string): Promise<void> 
   const { frames, ...meta } = clip;
   port.postMessage({ type: 'meta', meta });
 
-  for (let i = 0; i < frames.length && alive; i += FRAMES_PER_CHUNK) {
-    const batch = frames.slice(i, i + FRAMES_PER_CHUNK).map(bufferToBase64);
+  const step = framesPerChunk(frames.length);
+  for (let i = 0; i < frames.length && alive; i += step) {
+    const batch = frames.slice(i, i + step).map(bufferToBase64);
     port.postMessage({ type: 'chunk', start: i, frames: batch });
     // Yield so a long clip does not monopolise the worker.
     await new Promise((r) => setTimeout(r, 0));
