@@ -40,6 +40,7 @@ function render(): void {
   $('transitionVal').textContent = `${settings.transitionMs} ms`;
   $<HTMLInputElement>('cleanFrameGuard').checked = settings.cleanFrameGuard;
   $<HTMLInputElement>('autoStepAway').checked = settings.autoStepAway;
+  $<HTMLInputElement>('randomStart').checked = settings.randomStart;
   $<HTMLInputElement>('autoStop').checked = settings.maxClipMs > 0;
   const seconds = $<HTMLInputElement>('maxClipSec');
   seconds.disabled = settings.maxClipMs === 0;
@@ -74,6 +75,9 @@ $('cleanFrameGuard').addEventListener('change', (e) =>
 );
 $('autoStepAway').addEventListener('change', (e) =>
   void patch({ autoStepAway: (e.target as HTMLInputElement).checked }),
+);
+$('randomStart').addEventListener('change', (e) =>
+  void patch({ randomStart: (e.target as HTMLInputElement).checked }),
 );
 $('overlayVisible').addEventListener('change', (e) =>
   void patch({ overlayVisible: (e.target as HTMLInputElement).checked }),

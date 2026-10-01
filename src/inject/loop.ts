@@ -16,6 +16,8 @@ export class LoopPlayer {
   private style: LoopStyle;
   private readonly fade: number;
 
+  /** Frames kept decoded regardless of the playhead, so any can start instantly. */
+  private readonly pinned = new Set<number>();
   private pos = 0;
   private dir: 1 | -1 = 1;
   private accMs = 0;
@@ -46,11 +48,43 @@ export class LoopPlayer {
     this.accMs = 0;
   }
 
-  /** Decode enough frames that the first displayed frame is never blank. */
+  /** Decode enough frames around the playhead that the first one is never blank. */
   async prime(): Promise<void> {
-    const first = [];
-    for (let i = 0; i < Math.min(DECODE_LOOKAHEAD, this.frames.length); i++) first.push(this.decode(i));
-    await Promise.all(first);
+    const tasks = [];
+    for (let k = 0; k <= Math.min(DECODE_LOOKAHEAD, this.frames.length - 1); k++) {
+      tasks.push(this.decode(this.indexAhead(k)));
+    }
+    await Promise.all(tasks);
+  }
+
+  /**
+   * Decode `count` frames spread across the whole clip and keep them resident,
+   * so a takeover can begin at any of them with no decode latency. Used when a
+   * site opens the camera for a moment and we have to be looping already.
+   */
+  async primeSpread(count: number): Promise<void> {
+    const n = this.frames.length;
+    const step = Math.max(1, Math.floor(n / count));
+    for (let i = 0; i < n && this.pinned.size < count; i += step) this.pinned.add(i);
+    await Promise.all([...this.pinned].map((i) => this.decode(i)));
+  }
+
+  /** Positions that are decoded and ready to display right now. */
+  get anchors(): number[] {
+    return [...this.pinned].filter((i) => this.cache.has(i));
+  }
+
+  /** True when the current playhead can be painted without waiting on a decode. */
+  get isReady(): boolean {
+    return this.cache.has(this.pos);
+  }
+
+  /** Jump the playhead, picking a direction at random where that makes sense. */
+  startAt(index: number): void {
+    const limit = this.span - 1;
+    this.pos = Math.max(0, Math.min(limit, index));
+    this.dir = this.style !== 'crossfade' && this.pos > 0 && Math.random() < 0.5 ? -1 : 1;
+    this.accMs = 0;
   }
 
   /** Steps the playhead by elapsed wall time, honouring the clip's own fps. */
@@ -147,6 +181,7 @@ export class LoopPlayer {
       for (let k = 0; k < this.fade; k++) wanted.add(this.span + k);
     }
     wanted.add(0); // the ghost frame
+    for (const i of this.pinned) wanted.add(i);
 
     for (const idx of wanted) {
       if (!this.cache.has(idx) && !this.pending.has(idx)) void this.decode(idx);
@@ -175,6 +210,7 @@ export class LoopPlayer {
   }
 
   dispose(): void {
+    this.pinned.clear();
     for (const bitmap of this.cache.values()) bitmap.close();
     this.cache.clear();
     this.pending.clear();

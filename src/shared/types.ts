@@ -39,6 +39,8 @@ export interface Settings {
   cleanFrameGuard: boolean;
   /** Start on the loop the moment a site opens the camera, rather than live. */
   autoStepAway: boolean;
+  /** Begin each takeover at a different point in the clip. */
+  randomStart: boolean;
   /** Overrides the camera label reported to the page. Empty = passthrough. */
   customCameraLabel: string;
   effect: EffectId;
@@ -56,6 +58,7 @@ export const DEFAULT_SETTINGS: Settings = {
   transitionMs: 260,
   cleanFrameGuard: true,
   autoStepAway: false,
+  randomStart: false,
   customCameraLabel: '',
   effect: 'none',
   overlayVisible: true,

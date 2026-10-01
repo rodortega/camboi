@@ -66,6 +66,7 @@ export class Pipeline {
   private transitionStart = 0;
   private pendingLiveSince = 0;
   private capture: CaptureJob | null = null;
+  private holdUntil = 0;
 
   private refs = 0;
   private disposed = false;
@@ -203,6 +204,15 @@ export class Pipeline {
     this.settleState(now);
     if (this.loop) this.loop.advance(1000 / TARGET_FPS);
 
+    if (this.holdUntil) {
+      if (this.state === 'loop' || this.state === 'transition-to-loop') this.holdUntil = 0;
+      else if (now < this.holdUntil) return;
+      else {
+        this.holdUntil = 0;
+        this.host.toast('Clip was not ready in time — you are live', 'warn');
+      }
+    }
+
     if (this.state !== 'frozen') {
       const w = this.canvas.width;
       const h = this.canvas.height;
@@ -313,7 +323,9 @@ export class Pipeline {
     }
     this.loop?.dispose();
     this.loop = player;
-    await player.prime();
+    // A standby player is already decoded, so this stays synchronous and the
+    // state flips before a single live frame can reach the page.
+    if (!player.isReady) await player.prime();
 
     this.pendingLiveSince = 0;
     this.state = immediate ? 'loop' : 'transition-to-loop';
@@ -323,6 +335,18 @@ export class Pipeline {
   /** True while nothing has pulled this pipeline off the live camera yet. */
   get isLive(): boolean {
     return this.state === 'live';
+  }
+
+  /**
+   * Emit nothing at all until the loop is ready, for up to `ms`.
+   *
+   * Used when a call is meant to start on the loop but the clip is still being
+   * fetched. Sending no frames stalls the page harmlessly — sending the live
+   * camera would defeat the entire point. It expires so a slow or missing clip
+   * can never leave a real call permanently dark.
+   */
+  holdForLoop(ms: number): void {
+    this.holdUntil = performance.now() + ms;
   }
 
   goLive(): void {

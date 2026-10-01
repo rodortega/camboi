@@ -49,3 +49,5 @@ echo "=== record + loop ==="
 node loop.test.mjs | grep -E '^(PASS|FAIL)'
 echo "=== auto step-away ==="
 node autostepaway.test.mjs | grep -E '^(PASS|FAIL)'
+echo "=== random start ==="
+node randomstart.test.mjs | grep -E '^(PASS|FAIL)'

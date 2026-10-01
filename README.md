@@ -58,6 +58,16 @@ ordinary network hiccup rather than a cut.
 you are already on the loop, cutting straight in with no crossfade. You press Go live
 when you actually want to be seen, rather than the other way round.
 
+If the clip is still loading when the camera opens, CamBoi sends **no frames at all**
+rather than falling back to the live camera — the page waits instead, for up to five
+seconds, after which it goes live rather than leave a real call dark forever.
+
+**Start at a random point** — optional, and designed for pages that open the camera for
+a moment, grab a still and close it again. Each takeover begins somewhere different in
+the clip, never twice in the same place, so repeated snapshots are not identical. A
+pre-decoded set of frames spread across the clip is kept in reserve while this is on,
+so a camera that is only open for a few hundred milliseconds is still covered.
+
 **No length limit** — record for as long as you like. Clip frames are held in memory
 until you press Stop, so the Studio shows the running size and says something once a
 recording passes 750 MB. A minute of 720p is roughly 100 MB.
@@ -122,8 +132,10 @@ npm run typecheck
 `test/run.sh` builds, launches a throwaway Chrome with a synthetic camera, loads the
 extension over the DevTools protocol, and asserts the real behaviour end to end —
 interception and passthrough; recording a clip, looping it, panic-freezing and going
-live again; that an uncapped recording is never truncated; and that auto step-away puts
-a fresh call on the loop without ever showing the live camera. It never touches your real Chrome profile. (Chrome removed
+live again; that an uncapped recording is never truncated; that auto step-away puts a
+fresh call on the loop without ever showing the live camera; and that repeated
+short-lived camera sessions each start at a different point and never leak a live
+frame. It never touches your real Chrome profile. (Chrome removed
 `--load-extension` in M136, so it loads via `Extensions.loadUnpacked`, which needs
 `--enable-unsafe-extension-debugging`.)
 
